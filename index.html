@@ -1,0 +1,58 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <title>Audio Input Cycle</title>
+    <link rel="stylesheet" type="text/css" href="style.css">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/p5.js/1.6.0/p5.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/p5.js/1.6.0/addons/p5.sound.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/matter-js/0.19.0/matter.min.js"></script>
+</head>
+<body>
+    <main id="canvasContainer">
+        <!-- Your canvas will be appended here by p5.js -->
+    </main>
+
+    <div id="controls">
+        <div class="column" id="slidersColumn1">
+            <div class="slider-container">
+                <label for="windSlider">Mic In:</label>
+                <input type="range" class="custom-slider" id="windSlider" min="0" max="1" step="0.1" value="0.1">
+            </div>
+            <div class="slider-container">
+                <label for="forceSlider">Force Multiplier:</label>
+                <input type="range" class="custom-slider" id="forceSlider" min="0" max="1" step="0.1" value="0.5">
+            </div>
+        </div>
+        <div class="column" id="slidersColumn2">
+            <div class="slider-container">
+                <label for="peakSlider">Peak Threshold:</label>
+                <input type="range" class="custom-slider" id="peakSlider" min="0" max="1" step="0.1" value="0.5">
+            </div>
+            <div class="slider-container">
+                <label for="stabilitySlider">Stability Threshold:</label>
+                <input type="range" class="custom-slider" id="stabilitySlider" min="100" max="6000" step="100" value="1500">
+            </div>
+        </div>
+        <div class="column" id="buttonsColumn">
+            <button id="cycleAudioButton" class="styled-button">Cycle Audio Input</button>
+            <span id="audioSourceIndex" class="source-index">0</span>
+            <button id="startAudioButton" class="styled-button">Start Audio</button>
+        </div>
+      
+  <div class="column" id="vectorsColumn">
+                <button id="toggleVectorsButton" class="styled-button">Toggle Vectors</button>
+       </div>
+        <div class="column" id="toggleColumn">
+            <button id="toggleControlsButton" class="styled-button">Toggle Controls</button>
+        </div>
+    </div>
+
+    <script src="sketch.js"></script>
+    <script src="staveLine.js"></script>
+    <script src="circle.js"></script>
+    <script src="box.js"></script>
+    <script src="boundary.js"></script>
+    <script src="sky.js"></script>
+</body>
+</html>

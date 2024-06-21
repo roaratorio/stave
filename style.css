@@ -1,0 +1,161 @@
+html, body {
+  margin: 0;
+  padding: 0;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  font-family: 'Arial', sans-serif; /* Set a default font for the entire document */
+}
+
+canvas {
+  display: block;
+}
+
+/* Style the slider's thumb (draggable part) */
+.custom-slider {
+  -webkit-appearance: none;
+  appearance: none; 
+  width: 20%;
+  cursor: pointer;
+  outline: none;
+  overflow: hidden;
+  border-radius: 16px;
+}
+
+.custom-slider::-webkit-slider-runnable-track {
+  height: 15px;
+  background: #ccc;
+  border-radius: 16px;
+}
+
+.custom-slider::-moz-range-track {
+  height: 15px;
+  background: #ccc;
+  border-radius: 16px;
+}
+
+/* Style the slider's thumb (circle) */
+.custom-slider::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none; 
+  height: 15px;
+  width: 15px;
+  background-color: #fff;
+  border-radius: 50%;
+  border: 2px solid #000000;
+  box-shadow: -407px 0 0 400px #000000;
+}
+
+.custom-slider::-moz-range-thumb {
+  height: 15px;
+  width: 15px;
+  background-color: #fff;
+  border-radius: 50%;
+  border: 1px solid rgb(0,0,0);
+  box-shadow: -407px 0 0 400px rgb(0,0,0);
+}
+
+/* Style the slider's track (background) */
+.custom-slider::-webkit-slider-runnable-track {
+  width: 20%;
+  height: 15px;
+  cursor: pointer;
+  border: 1px solid rgb(0,0,0);
+  background: rgb(255,253,253); /* Set the track color to black */
+}
+
+/* Style the slider's thumb on hover */
+.custom-slider:hover {
+    opacity: 1;
+}
+
+label, .custom-slider {
+    display: block; /* Ensures the label and slider appear on separate lines */
+    margin-bottom: 5px; /* Adds a little space below each element */
+    font-family: 'Arial', sans-serif; /* Apply the font to labels */
+    font-size: 14px; /* Ensure the font size is consistent */
+}
+
+body {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    height: 100vh;
+    margin: 0;
+    flex-direction: column;
+}
+
+#canvasContainer {
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+}
+
+#controls {
+    margin-top: 20px;
+    display: flex;
+    justify-content: center;
+    align-items: flex-start;
+    gap: 20px; /* Adjust the gap between columns as needed */
+}
+
+.column {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+}
+
+.slider-container {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    margin-bottom: 10px; /* Add space between each slider container */
+}
+
+.custom-slider {
+    width: 130px; /* Fixed width for the sliders */
+}
+
+.styled-button {
+    display: inline-block;
+    padding: 10px 10px;
+    font-size: 14px; /* Ensure the font size is consistent */
+    font-weight: bold;
+    color: #fff;
+    background-color: #484B4B;
+    border: none;
+    border-radius: 5px;
+    cursor: pointer;
+    text-align: center;
+    transition: background-color 0.3s, transform 0.3s;
+    margin-bottom: 10px; /* Add space between buttons */
+    font-family: 'Arial', sans-serif; /* Apply the font to buttons */
+}
+
+.styled-button:hover {
+    background-color: #131414;
+}
+
+.styled-button:active {
+    transform: scale(0.98);
+}
+
+.source-index {
+    font-size: 16px;
+    font-weight: bold;
+    margin-left: 10px;
+    color: #131414;
+    margin-bottom: 10px; /* Add space below the source index */
+}
+
+#toggleControlsButton, #toggleVectorsButton {
+    background-color: #484B4B;
+    color: white;
+}
+
+#toggleControlsButton.toggled, #toggleVectorsButton.toggled {
+    background-color: #EBE4E4; /* Change this to the color you want when toggled */
+}
