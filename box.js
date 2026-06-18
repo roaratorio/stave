@@ -1,9 +1,11 @@
 class Box {
-    constructor(x, y, r) {
+    constructor(x, y, r, flatness = 0) {
         this.x = x;
         this.y = y;
-        this.r = 12; // Radius used in the constructor
-        this.fade = 255; // Initialize opacity
+        this.r = 12;
+        this.fade = 255;
+        // Pure tones (low flatness) render dark; noisy tones render lighter grey
+        this.baseGrey = constrain(map(flatness, 0, 0.5, 0, 120), 0, 120);
         this.fadeStartY = 350; // Set the y position after which fade begins
         let options = {
             friction: 0.1,
@@ -79,9 +81,9 @@ class Box {
         rotate(angle);
         rectMode(CENTER);
         strokeWeight(1);
-        stroke(0, this.fade);
-        fill(0, this.fade);
-        ellipse(0, 0, this.r * 1.5, this.r * 2.0); // Drawing as an ellipse for visual effect
+        stroke(this.baseGrey, this.fade);
+        fill(this.baseGrey, this.fade);
+        ellipse(0, 0, this.r * 1.5, this.r * 2.0);
         pop();
     }
 }
