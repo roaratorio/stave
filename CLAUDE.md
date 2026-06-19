@@ -29,7 +29,7 @@ The user must click **Start Audio** to trigger the microphone permission prompt 
 
 ### Audio analysis pipeline (runs every frame in `draw()`)
 
-`fft.analyze()` is called **once per frame** and the result stored in `currentSpectrum`. This single array is passed as an argument to all analysis functions — do not call `fft.analyze()` again inside helper functions.
+`fft.analyze()` is called **once per frame** and the result stored in `currentSpectrum`. `fft.getCentroid()` is also called once and cached as `frameCentroid` — do not call either again inside helper functions.
 
 The pipeline:
 1. `calculateSpectralFlux(currentSpectrum, previousSpectrum)` → per-frame change → `fluxHistory`
@@ -40,9 +40,20 @@ The pipeline:
 6. `evaluateHarmonicContent(currentSpectrum)` → `combinedFactorGlobal` (spread × peaks)
 7. `evaluateAudioProperties(currentSpectrum)` → raw `noisinessScore`
 
-### Noisiness scaling and timbral calibration
+### Noisiness scoring and timbral calibration
 
-`noisinessScore` (0–1 composite of flatness, peak count, spread) is remapped to `scaledNoisiness` before driving `staticVector.y`. If timbral calibration has been done, the calibrated instrument-specific range is used:
+`noisinessScore` is a weighted composite designed to order sounds as: pure tone < rich harmonics < white noise / breath:
+
+```js
+// flatness (Wiener entropy) is the primary noise discriminator (0=tonal, 1=white noise)
+// peaks separate pure (few) from rich harmonics (many) within tonal content
+// flatness range is 0–1 by definition; no remapping needed
+let noisinessScore = 0.55 * normalizedFlatness + 0.25 * normalizedPeaks + 0.20 * normalizedSpread;
+```
+
+Peak counting uses a **mean-relative threshold** (`mean(spectrum) × peakAmpThreshold`) so peak count is independent of overall loudness. The "Harmonic Sensitivity" slider maps to a multiplier of mean energy (0.5–8), not an absolute amplitude.
+
+`noisinessScore` is remapped to `scaledNoisiness` before driving `staticVector.y`. If timbral calibration has been done, the calibrated instrument-specific range is used:
 
 ```js
 if (calNoisyScore > calPureScore + 0.05) {
@@ -70,26 +81,42 @@ let safeWindMulti = lerp(0.0002, MAX_WIND_MULTI, tension * tension) * (1 - outro
 ### The two tracking vectors
 
 - `movingVector` — travels an **exponential decay curve** over 480 seconds (8 minutes). Starts top-left (noisy zone), decays toward bottom-right (pure/stable zone). Computed from elapsed time each frame — no animation parameter.
-- `staticVector` — x driven by smoothed audio stability; y driven by smoothed `scaledNoisiness`
+- `staticVector` — x driven by `stabilityAccumulator` (leaky integrator); y driven by smoothed `scaledNoisiness`
 - Their distance drives `tension` (0–1); `tension` is a **global** computed each frame in `draw()` before `calculateWind()` is called
 - `rectWidth` (progress bar) tracks the 8-minute arc
 
 The decay curve formula: `movingVector.y = height - (a * exp(-b * (x - startX) / 10))` where `a=400`, `b=0.03`, `startX=100`, `endX=1050`.
+
+#### staticVector X — leaky integrator
+
+`stabilityAccumulator` (0–1 global) drives `staticVector.x`. It fills when `isStable` is true and drains when false:
+
+```js
+if (isStable) {
+  stabilityAccumulator = Math.min(1, stabilityAccumulator + 0.0017); // ~10s to reach right
+} else {
+  stabilityAccumulator = Math.max(0, stabilityAccumulator - 0.004);  // ~4s to drain back left
+}
+```
+
+This gives the "balloon/breath" feel: sustained stable playing is required to move the dot rightward; once playing stops, it drifts back within a few seconds rather than snapping or lingering.
 
 ### Note head spawning (dandelion effect)
 
 Notes spawn when volume exceeds `_spawnThreshold` (adaptive). Spawn rate and initial velocity scale with `tensionBonus` — when near the sweet spot, notes burst off the stave like dandelion spores:
 
 - Max 4 boxes at any time (capped at 0 during outro)
+- All note heads render at a consistent size (`this.r = 12`)
 - `tensionBonus = pow(max(0, tension - 0.5) * 2, 1.5)` — rises sharply above tension 0.5
 - At high tension: shorter spawn interval, initial scatter velocity applied via `Body.setVelocity()`
 - Spawn x-position is log-mapped from spectral centroid (low pitch = left, high = right)
+- Note head grey level is set from spectral flatness at spawn time (pure tone = dark, noisy = lighter)
 
 ### Calibration
 
-Four-phase sequence, triggered by the Calibrate button (visible after Start Audio):
+Each phase has a **2.5-second lead-in countdown** before sampling begins, giving the performer time to settle. Four phases total:
 
-| Phase | Duration | What is measured |
+| Phase | Sample duration | What is measured |
 |---|---|---|
 | Silence | 3s | Amplitude noise floor → `noiseFloor` |
 | Play normally | 5s | Amplitude peak → `calibratedPeak` |
@@ -98,13 +125,17 @@ Four-phase sequence, triggered by the Calibrate button (visible after Start Audi
 
 After calibration, adaptive thresholds are set on `window._spawnThreshold`, `window._onsetThreshold`, `window._stabilityAmpMin`. All values are saved in localStorage and restored on next load. Slider positions are also saved automatically.
 
+Default thresholds are seeded at startup (before localStorage restores) so uncalibrated runs behave consistently.
+
+If the noisy/pure phases don't produce enough contrast (`calNoisyScore ≤ calPureScore + 0.05`), a message is shown for 4 seconds explaining the issue; amplitude calibration still applies.
+
 ### Outro
 
 When `transitionFactor` reaches 1 (8 minutes), `outroStarted = true` and `outroFactor` ramps from 0→1 over 30 seconds. This fades wind to zero and stops note spawning. Existing notes fall and fade naturally under gravity.
 
 ### Physics world
 
-Five stave lines, each a chain of `Particle` bodies connected by Matter.js `Constraint` objects. Lines are differentiated by frequency band: line 1 (top) responds to high frequencies via `getBandEnergy(currentSpectrum, 4)`, line 5 (bottom) to low via `getBandEnergy(currentSpectrum, 0)`. Line stroke weights taper from 1.0px (top) to 2.0px (bottom).
+Five stave lines, each a chain of `Particle` bodies connected by Matter.js `Constraint` objects (stiffness `0.55` — elastic enough to ripple visibly under wind without being floppy). Lines are differentiated by frequency band: line 1 (top) responds to high frequencies via `getBandEnergy(currentSpectrum, 4)`, line 5 (bottom) to low via `getBandEnergy(currentSpectrum, 0)`. All lines render at **1.5px stroke weight** (uniform).
 
 `Box` note heads spawn at x derived from spectral centroid. When boxes are removed from `boxes[]`, `Composite.remove(world, box.body)` must also be called to clean up the physics world.
 
@@ -116,6 +147,12 @@ Five stave lines, each a chain of `Particle` bodies connected by Matter.js `Cons
 
 `isPerformanceMode` (global) hides the entire `#controls` div and the practice HUD (mic meter, stability dot) when true. The progress bar remains visible. Toggled by the "Performance Mode (H)" button or the `H` key.
 
+### Vector display (V key)
+
+When `showVectors` is true, the exponential decay curve path is drawn, plus:
+- **Red dot** (10px, black outline) — `movingVector`, the 8-minute sweet-spot target
+- **Green dot** (16px, black outline) — `staticVector`, the performer's current state
+
 ### Key globals and ownership rules
 
 - `windMulti` — owned exclusively by `updateWindMultiplierBasedOnStability()`; never assign elsewhere
@@ -123,6 +160,8 @@ Five stave lines, each a chain of `Particle` bodies connected by Matter.js `Cons
 - `outroFactor` — owned by `draw()`; read by `calculateWind()`; do not compute elsewhere
 - `transientEnergy` — set by onset detection in `draw()`, decays each frame; used by wind and clef
 - `isStable` — debounced stability flag; requires 5 consecutive stable frames to enter stable state
+- `stabilityAccumulator` — owned by `draw()`; drives `staticVector.x`; do not write elsewhere
+- `frameCentroid` — cached by `draw()` after `fft.getCentroid()`; used by all analysis functions
 - `scaledVariance` — set as a side-effect inside `normalizeVarianceLogarithmic()`
 - `combinedFactorGlobal` — spread + peak count combined factor; used elsewhere in wind logic
 - `isPerformanceMode` — toggled by `toggleControls()`; gates HUD drawing in `draw()`

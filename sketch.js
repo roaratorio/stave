@@ -11,65 +11,38 @@ const {
 
 let engine;
 let world;
-//create snow..........
 
-let snow = [];
-let gravity;
 let windSlider;
-let peakSlider; //how high to set threshold for counting harmonic peaks
+let peakSlider;
 let forceSlider;
 let stabilitySlider;
-let customSlider; //styled in css file
+let customSlider;
 
-
-
-//............
 let particles = [];
-//let particles2 = [];
 let boundaries = [];
 let mConstraint;
-let ball;
-//let gravity = 0.001; //don't need this
 let stringLength;
 let increment;
-let bounceFactor = -0.5;
-let ballForceScale = 0.02;
-let windScale = 0.001;
 let windXoff = 0;
 let windYoff = 0;
-let windMulti = 0; //use this global variable to pass fft values (smoothedflatness) into the force calculator
-let combinedFactorGlobal = 0; // Initial value for calculation of combined Peak Count and Centroid Spread
+let windMulti = 0;
+let combinedFactorGlobal = 0;
 
-let mass;
-let incrementalMass = 0.3; // Starting mass
-const massIncreaseRate = 0.001; // How much to increase the mass each time
-let lastMassUpdateTime = 0; // Last time the mass was updated
-const massUpdateInterval = 5000; // Interval to update the mass, e.g., every 5 seconds
-
-
-
+let mass = 1; // passed to Particle constructors via staveLine.js
 
 let boxes = [];
-let lastBoxTime = 0; // Initialize a variable to keep track of the last box creation time
-let minBoxInterval = 3000; // Minimum time interval (3 seconds) in milliseconds
-let maxBoxInterval = 5000; // Maximum time interval (5 seconds) in milliseconds
+let lastBoxTime = 0;
+let minBoxInterval = 3000;
 
-//Add a scaling factor to instability readings that go over a certain value. 
-let MAX_WIND_MULTI = 0.0060; // Maximum acceptable value for windMulti
-const WIND_MULTI_SCALING_FACTOR = 10; // Factor to divide by when exceeding MAX_WIND
-let peakAmpThreshold = 5; //This sets the amplituded threshold for counting the harmonic peaks. Controlled with the peakSlider. High value or threshold means less peaks will be counted. 
+let MAX_WIND_MULTI = 0.0060;
+let peakAmpThreshold = 4.25; // default: multiplier of mean spectrum energy (set by slider)
 
 let stabilityThreshold = 500;
 
-//transition weighting from purer to favouring noisier tones over time
-let transitionFactor = 0; // Ranges from 0 (purer tones dominate) to 1 (noisier tones dominate)
-let transitionStartTime // Track when the transition starts
-let transitionDuration; // Duration of transition from pure to noisy in milliseconds (e.g., 1 minute)
+let transitionFactor = 0;
+let transitionStartTime;
+let transitionDuration;
 
-
-let streetlight;
-
-//part of the clef function
 let bassclef;
 let clefAngle = 0.08;         // initial small displacement to start it swinging
 let clefAngularVelocity = 0;
@@ -85,39 +58,32 @@ let currentSourceIndex = 0;
 let audioInputSources = [];
 let isAudioStarted = false;
 let fft;
+let frameCentroid = 0; // cached once per frame by draw()
 let previousSpectrum = [];
 let currentSpectrum = [];
-let circleDiameter = 0;
 
-let fluxHistory = []; // To store recent flux values
-let maxFluxWindow = 0; // Maximum flux in the current window
-let windowDuration = 1500; // Window duration in milliseconds to match varianceCalcInterval
-let lastUpdateTime = 0; // Last time the window was updated
+let fluxHistory = [];
+let maxFluxWindow = 0;
+let windowDuration = 1500;
 
-let lastVarianceCalcTime = 0; // Last time we calculated variance
-let varianceCalcInterval = 1500; // Calculate variance every 1000 milliseconds
+let lastVarianceCalcTime = 0;
+let varianceCalcInterval = 1500;
 
-let isStable = false; // Global flag indicating stability
+let isStable = false;
 
-let minVariance = Infinity; // Initialize to a high value for min variance tracking
-let maxVariance = -Infinity; 
-let lastNormalizedVariance = 0; // To store the last calculated normalized variance
-let observedMinVariance = Infinity; // To track the minimum observed variance for scaling
-let observedMaxVariance = 0; // To track the maximum observed variance for scaling
+let observedMinVariance = Infinity;
+let observedMaxVariance = 0;
 let scaledVariance = 0;
 let rectWidth = 0;
 
-//let stabilityThreshold = 600;
-//let peakAmpThreshold = 5;
-
 
 let stabilityRecords = [];
-let avgStability = 0;
 let lastStableTime = 0;
 
 let transientEnergy = 0;   // decaying spike triggered by sudden onset
 let prevFlux = 0;          // previous frame flux for onset detection
 let stableFrameCount = 0;  // consecutive frames below stability threshold
+let stabilityAccumulator = 0; // leaky integrator driving staticVector X (0–1)
 
 let smoothStaticVectorX = 200; // Initial smoothed value, assuming staticVector starts at x = 200
 const smoothingFactor = 0.1; // Smoothing factor, adjust between 0 (no smoothing) and 1 (no change)
@@ -147,10 +113,9 @@ let distance;
 let showVectors = false;
 let toggleVectorsButton;
 
-let startX = 100; //starting and end points for vectors
+let startX = 100;
 let startY = 50;
 let endX = 1050;
-let endY = 50;
 
 let tension = 0;       // 0–1, computed each frame: 1 = vectors close (sweet spot), 0 = far apart
 let isPerformanceMode = false;
@@ -299,7 +264,6 @@ function setup() {
     stringLength = 1206;
     increment = 18; // the increment must be a divisor of stringLength
     world = engine.world;
-    mass = 1;
   
   
   //arguments for line are: (y position, length, stiffness, radius)
@@ -319,19 +283,19 @@ function setup() {
 //     line5.createParticlesAndConstraints(line5Particles);
   
   
-    line1 = new staveLine(116, 0, 0.85, 10);
+    line1 = new staveLine(116, 0, 0.55, 10);
     line1.createParticlesAndConstraints(line1Particles);
   
-    line2 = new staveLine(141, 0, 0.85, 10);
+    line2 = new staveLine(141, 0, 0.55, 10);
     line2.createParticlesAndConstraints(line2Particles);
   
-    line3 = new staveLine(166, 0, 0.85, 10);
+    line3 = new staveLine(166, 0, 0.55, 10);
     line3.createParticlesAndConstraints(line3Particles);
   
-    line4 = new staveLine(191, 0, 0.85, 10);
+    line4 = new staveLine(191, 0, 0.55, 10);
     line4.createParticlesAndConstraints(line4Particles);
   
-    line5 = new staveLine(216, 0, 0.85, 10);
+    line5 = new staveLine(216, 0, 0.55, 10);
     line5.createParticlesAndConstraints(line5Particles);
     
   
@@ -354,12 +318,13 @@ function setup() {
 
   // Restore slider positions and calibration from previous session
   restoreSavedSliders();
+  applyCalibration(); // seed default thresholds before any localStorage restore
   let savedFloor = parseFloat(localStorage.getItem('stave_noiseFloor'));
   let savedPeak  = parseFloat(localStorage.getItem('stave_calibratedPeak'));
   if (!isNaN(savedFloor) && !isNaN(savedPeak)) {
     noiseFloor = savedFloor;
     calibratedPeak = savedPeak;
-    applyCalibration();
+    applyCalibration(); // re-apply with saved values
   }
   let savedNoisy = parseFloat(localStorage.getItem('stave_calNoisyScore'));
   let savedPure  = parseFloat(localStorage.getItem('stave_calPureScore'));
@@ -471,7 +436,8 @@ function setAudioSource(index) {
   }
 
   fft.setInput(audioIn);
-  audioIn.amp(0.5);
+  // Re-apply the Mic In slider rather than resetting to a hardcoded value
+  if (customSlider) audioIn.amp(parseFloat(customSlider.value()));
 }
 
 function cycleAudioSource() {
@@ -497,54 +463,86 @@ function startCalibration() {
   showCalibrationOverlay('Stay quiet — measuring room noise...', 0);
 }
 
+const PHASE_LEAD_IN = 2500; // ms of countdown before each calibration phase starts sampling
+
 function tickCalibration() {
   if (calibrationState === 'idle' || calibrationState === 'done') return;
   let level = audioIn.getLevel();
   let elapsed = millis() - calibrationStartTime;
 
   if (calibrationState === 'silence') {
+    if (elapsed < PHASE_LEAD_IN) {
+      let sec = Math.ceil((PHASE_LEAD_IN - elapsed) / 1000);
+      showCalibrationOverlay(`Stay completely quiet — measuring in ${sec}...`, 0);
+      return;
+    }
+    let sampleElapsed = elapsed - PHASE_LEAD_IN;
     silenceSamples.push(level);
-    updateCalibrationProgress(elapsed / SILENCE_DURATION);
-    if (elapsed >= SILENCE_DURATION) {
+    updateCalibrationProgress(sampleElapsed / SILENCE_DURATION);
+    if (sampleElapsed >= SILENCE_DURATION) {
       let avg = silenceSamples.reduce((a, b) => a + b, 0) / silenceSamples.length;
       noiseFloor = avg * 1.5;
       calibrationState = 'playing';
       calibrationStartTime = millis();
       playingSamples = [];
-      showCalibrationOverlay('Now play at your normal performance level...', 0);
+      showCalibrationOverlay('Get ready — play at your normal level in 3...', 0);
     }
   } else if (calibrationState === 'playing') {
+    if (elapsed < PHASE_LEAD_IN) {
+      let sec = Math.ceil((PHASE_LEAD_IN - elapsed) / 1000);
+      showCalibrationOverlay(`Play at your normal performance level — starting in ${sec}...`, 0);
+      return;
+    }
+    let sampleElapsed = elapsed - PHASE_LEAD_IN;
     playingSamples.push(level);
-    updateCalibrationProgress(elapsed / PLAYING_DURATION);
-    if (elapsed >= PLAYING_DURATION) {
-      calibratedPeak = Math.max(...playingSamples) * 0.9;
+    updateCalibrationProgress(sampleElapsed / PLAYING_DURATION);
+    if (sampleElapsed >= PLAYING_DURATION) {
+      calibratedPeak = playingSamples.length > 0 ? Math.max(...playingSamples) * 0.9 : noiseFloor * 4;
       if (calibratedPeak <= noiseFloor) calibratedPeak = noiseFloor * 4;
       applyCalibration();
       calibrationState = 'noisy';
       calibrationStartTime = millis();
       noisySamples = [];
-      showCalibrationOverlay('Play your most complex, irregular texture...', 0);
+      showCalibrationOverlay('Get ready — noisy texture phase in 3...', 0);
     }
   } else if (calibrationState === 'noisy') {
+    if (elapsed < PHASE_LEAD_IN) {
+      let sec = Math.ceil((PHASE_LEAD_IN - elapsed) / 1000);
+      showCalibrationOverlay(`Play your most complex, irregular texture — starting in ${sec}...`, 0);
+      return;
+    }
+    let sampleElapsed = elapsed - PHASE_LEAD_IN;
     let score = evaluateAudioProperties(currentSpectrum).noisinessScore;
     noisySamples.push(score);
-    updateCalibrationProgress(elapsed / NOISY_DURATION);
-    if (elapsed >= NOISY_DURATION) {
+    updateCalibrationProgress(sampleElapsed / NOISY_DURATION);
+    if (sampleElapsed >= NOISY_DURATION) {
       calNoisyScore = noisySamples.reduce((a, b) => a + b, 0) / noisySamples.length;
       calibrationState = 'pure';
       calibrationStartTime = millis();
       pureSamples = [];
-      showCalibrationOverlay('Now sustain your purest, cleanest tone...', 0);
+      showCalibrationOverlay('Get ready — pure tone phase in 3...', 0);
     }
   } else if (calibrationState === 'pure') {
+    if (elapsed < PHASE_LEAD_IN) {
+      let sec = Math.ceil((PHASE_LEAD_IN - elapsed) / 1000);
+      showCalibrationOverlay(`Sustain your purest, cleanest tone — starting in ${sec}...`, 0);
+      return;
+    }
+    let sampleElapsed = elapsed - PHASE_LEAD_IN;
     let score = evaluateAudioProperties(currentSpectrum).noisinessScore;
     pureSamples.push(score);
-    updateCalibrationProgress(elapsed / PURE_DURATION);
-    if (elapsed >= PURE_DURATION) {
+    updateCalibrationProgress(sampleElapsed / PURE_DURATION);
+    if (sampleElapsed >= PURE_DURATION) {
       calPureScore = pureSamples.reduce((a, b) => a + b, 0) / pureSamples.length;
-      if (calNoisyScore > calPureScore + 0.05) applyTimbreCalibration();
+      if (calNoisyScore > calPureScore + 0.05) {
+        applyTimbreCalibration();
+        hideCalibrationOverlay();
+      } else {
+        // Timbral range too narrow — amplitude calibration still applied; let performer know
+        showCalibrationOverlay('Timbral range too small — try again with more contrast between your noisiest and purest textures.', 0);
+        setTimeout(hideCalibrationOverlay, 4000);
+      }
       calibrationState = 'done';
-      hideCalibrationOverlay();
     }
   }
 }
@@ -623,12 +621,6 @@ function getBandEnergy(spectrum, bandIndex) {
     return constrain(avg / 255, 0, 1);
 }
 
-function normalizeVariance(variance) {
-  if (variance < minVariance) minVariance = variance;
-  if (variance > maxVariance) maxVariance = variance;
-  if (minVariance === maxVariance) return 0;
-  return (variance - minVariance) / (maxVariance - minVariance);
-}
 
 function calculateSpectralFlux(current, previous) {
   if (previous.length === 0) return 0;
@@ -646,24 +638,6 @@ function calculateVariance(values) {
   return variance;
 }
 
-function updateObservedRange(variance) {
-  observedMinVariance = Math.min(observedMinVariance, variance);
-  observedMaxVariance = Math.max(observedMaxVariance, variance);
-}
-
-function scaleVariance(value) {
-  let range = observedMaxVariance - observedMinVariance;
-  if (range === 0) return 0;
-  return (value - observedMinVariance) / range;
-}
-
-function amplifyVariance(value) {
-    // Adjust the scaling factor to make smaller values more distinguishable
-    // This is just an example and might need tuning
-    // let adjustedValue = (value - observedMinVariance) / (observedMaxVariance - observedMinVariance);
-    // return adjustedValue * 2; // Example: stretching the scale by a factor of 2
-  return Math.pow(value, 0.5);
-}
 
 
 function normalizeVarianceLogarithmic(variance) {
@@ -689,9 +663,10 @@ function normalizeVarianceLogarithmic(variance) {
 
 
 function calculateSpectralSpread(spectrum, centroid) {
-  let num = 0; // Numerator for the weighted variance
-  let den = 0; // Denominator for the weighted variance
-  let n = spectrum.length; // Total number of frequency bins
+  if (!spectrum || spectrum.length === 0) return 0;
+  let num = 0;
+  let den = 0;
+  let n = spectrum.length;
   
   for (let i = 0; i < n; i++) {
     let freq = map(i, 0, n, 0, 22050); // Assuming a sample rate of 44100Hz, map bin index to frequency
@@ -739,14 +714,16 @@ function calculateSpectralFlatness(spectrum) {
 
 
 
-function countProminentPeaks(spectrum, threshold) {
+function countProminentPeaks(spectrum, thresholdMultiplier) {
+    if (!spectrum || spectrum.length === 0) return 0;
+    let mean = spectrum.reduce((a, b) => a + b, 0) / spectrum.length;
+    let threshold = mean * thresholdMultiplier; // loudness-independent
     let peaks = 0;
     for (let i = 1; i < spectrum.length - 1; i++) {
         if (spectrum[i] > spectrum[i - 1] && spectrum[i] > spectrum[i + 1] && spectrum[i] > threshold) {
             peaks++;
         }
     }
-    //console.log("Peaks", peaks);
     return peaks;
 }
 
@@ -799,23 +776,18 @@ function calculateSpreadAndPeaksFactor(spread, peakCount) {
 function evaluateAudioProperties(spectrum) {
     let flatness = calculateSpectralFlatness(spectrum);
     let peaks = countProminentPeaks(spectrum, peakAmpThreshold);
-    let spread = calculateSpectralSpread(spectrum, fft.getCentroid());
+    let spread = calculateSpectralSpread(spectrum, frameCentroid);
 
-    // Normalize the audio properties based on observed or expected maximum values
-  
-  let normalizedFlatness = constrain(map(flatness, 0, 3, 0, 1), 0, 1); // Assuming flatness ranges from 0 to 3
-    let normalizedPeaks = constrain(map(peaks, 0, 30, 0, 1), 0, 1); // Assuming peak counts range from 0 to 30
-    let normalizedSpread = constrain(map(spread, 0, 4000, 0, 1), 0, 1); // Assuming spread ranges from 0 to 4000
+    // flatness is already 0–1 (geo/arith mean ratio); peaks 0–30; spread 0–4000
+    let normalizedFlatness = constrain(flatness, 0, 1);
+    let normalizedPeaks = constrain(map(peaks, 0, 30, 0, 1), 0, 1);
+    let normalizedSpread = constrain(map(spread, 0, 4000, 0, 1), 0, 1);
 
-    // Calculate a composite noisiness score
-    let noisinessScore = (normalizedFlatness + normalizedPeaks + normalizedSpread) / 3;
+    // Weighted so: pure tone < rich harmonics < white noise/breath
+    // Flatness (noise discriminator) dominates; peaks separate rich from pure within tonal content
+    let noisinessScore = 0.55 * normalizedFlatness + 0.25 * normalizedPeaks + 0.20 * normalizedSpread;
 
-    return {
-        flatness,
-        peaks,
-        spread,
-        noisinessScore
-    };
+    return { flatness, peaks, spread, noisinessScore };
 }
 
 function scaleNoisiness(noisiness, power) {
@@ -890,13 +862,13 @@ function draw() {
         endShape();
 
         // Draw moving vector (sweet-spot target)
-        fill(255, 0, 0, 80);
-        noStroke();
+        stroke(0);
+        strokeWeight(1.5);
+        fill(255, 0, 0, 180);
         circle(movingVector.x, movingVector.y, 10);
 
-        // Draw static vector (performer's current state)
-        fill(0, 255, 0, 80);
-        circle(staticVector.x, staticVector.y, 10);
+        fill(0, 255, 0, 200);
+        circle(staticVector.x, staticVector.y, 16);
     }
   
   
@@ -981,10 +953,8 @@ function draw() {
     let currentTime = millis();
     let spectrum = fft.analyze();
     let centroid = fft.getCentroid();
-    //let level = audioIn.getLevel();
-    //console.log("Volume", level);
-    let spread = calculateSpectralSpread(spectrum, centroid)
-    //console.log("Centroid Spead", spread);
+    frameCentroid = centroid; // cache for all functions this frame
+    let spread = calculateSpectralSpread(spectrum, centroid);
     currentSpectrum = spectrum;
     let elapsedTime = currentTime - lastBoxTime;
   
@@ -1028,15 +998,7 @@ function draw() {
   }
   
   let stabilityAssessment = assessStability(fluxHistory, maxFluxWindow, currentTime);
-  //console.log("Stability Assessment", stabilityAssessment);
-  
-  let assessmentTime = millis(); 
-  
-    avgStability = averageStabilityLast5Seconds(assessmentTime);
-    //console.log("Average Stability Last 5 Seconds:", avgStability);
-  //console.log("AvStable", avgStability);
-//updateWindMultiplierBasedOnStability(stabilityAssessment);
-  
+
 updateWindMultiplierBasedOnStability(stabilityAssessment);
   
   //evaluateHarmonicContent();
@@ -1065,8 +1027,15 @@ updateWindMultiplierBasedOnStability(stabilityAssessment);
     scaledNoisiness = scaleNoisiness(noisiness, 1);
   }
   
-  // Apply exponential moving average to smooth the x position of staticVector
-  smoothStaticVectorX += smoothingFactor * (avgStability * 0.2 - smoothStaticVectorX);
+  // X axis: leaky integrator — requires ~10s of continuous stability to reach right,
+  // ~20s of instability to drain back left. Prevents the dot snapping across instantly.
+  if (isStable) {
+    stabilityAccumulator = Math.min(1, stabilityAccumulator + 0.0017); // ~10s to fill
+  } else {
+    stabilityAccumulator = Math.max(0, stabilityAccumulator - 0.004);  // ~4s to drain
+  }
+  let targetX = map(stabilityAccumulator, 0, 1, 50, width - 50);
+  smoothStaticVectorX += smoothingFactor * (targetX - smoothStaticVectorX);
   staticVector.x = constrain(smoothStaticVectorX, 0, width);
   
   let targetY = height - (scaledNoisiness * height);
@@ -1126,8 +1095,7 @@ updateWindMultiplierBasedOnStability(stabilityAssessment);
   let spawnThreshold = window._spawnThreshold || 0.01;
 
     if (elapsedTime >= spawnInterval && boxes.length < maxBoxes && checkVolume > spawnThreshold) {
-        let centroidHz = fft.getCentroid();
-        let spawnX = constrain(map(Math.log(centroidHz + 1), Math.log(21), Math.log(20001), 70, width - 20), 70, width - 20);
+        let spawnX = constrain(map(Math.log(centroid + 1), Math.log(21), Math.log(20001), 70, width - 20), 70, width - 20);
         let spawnFlatness = calculateSpectralFlatness(currentSpectrum);
         let newBox = new Box(spawnX, random(-30, 50), 8, spawnFlatness);
         boxes.push(newBox);
@@ -1184,11 +1152,11 @@ updateWindMultiplierBasedOnStability(stabilityAssessment);
   //pass line1Particles array to drawLine function to draw the lines of the stave
   
 //   bgGradient.show();
-  drawLine(line1Particles, 1.0);
-  drawLine(line2Particles, 1.25);
+  drawLine(line1Particles, 1.5);
+  drawLine(line2Particles, 1.5);
   drawLine(line3Particles, 1.5);
-  drawLine(line4Particles, 1.75);
-  drawLine(line5Particles, 2.0);
+  drawLine(line4Particles, 1.5);
+  drawLine(line5Particles, 1.5);
   //drawLine2();
   clef();
   
@@ -1406,7 +1374,8 @@ function updateForceValue(){
 
 function updatePeakValue(){
   let PeakSliderValue = peakSlider.value();
-  peakAmpThreshold = map(PeakSliderValue, 0, 1, 5, 150);
+  // Now a multiplier of mean spectrum energy (0.5=sensitive, 8=strict)
+  peakAmpThreshold = map(PeakSliderValue, 0, 1, 0.5, 8);
   localStorage.setItem('stave_peakSlider', PeakSliderValue);
 }
 
@@ -1436,6 +1405,10 @@ function assessStability(fluxHistory, maxFluxWindow, currentTime) {
 
     if (stableFrameCount >= STABLE_FRAMES_REQUIRED) {
         if (lastStableTime === 0) lastStableTime = currentTime;
+        // Trim records older than 5s to bound memory over the 8-minute performance
+        while (stabilityRecords.length > 0 && currentTime - stabilityRecords[0].time > 5000) {
+            stabilityRecords.shift();
+        }
         stabilityRecords.push({ time: currentTime, duration: currentTime - lastStableTime });
         return { isStable: true, stableDuration: currentTime - lastStableTime };
     } else if (stableFrameCount === 0) {
@@ -1475,35 +1448,6 @@ function assessStability(fluxHistory, maxFluxWindow, currentTime) {
 // }
 
 
-function averageStabilityLast5Seconds(currentTime) {
-    const fiveSecondsAgo = currentTime - 5000;
-    //console.log("Current Time:", currentTime);
-    //console.log("Calculating from:", fiveSecondsAgo);
-    const recentRecords = stabilityRecords.filter(record => record.time > fiveSecondsAgo);
-    //console.log("Records Length", recentRecords.length);
-    if (recentRecords.length === 0) return 0;
-    const totalDuration = recentRecords.reduce((acc, record) => acc + record.duration, 0);
-    return totalDuration / recentRecords.length;
-}
-
-
-// function averageStabilityLast5Seconds(currentTime) {
-//     const fiveSecondsAgo = currentTime - 5000;
-//     console.log("Current Time:", currentTime);
-//     console.log("Calculating from:", fiveSecondsAgo);
-
-//     const recentRecords = stabilityRecords.filter(record => {
-//         console.log("Record Time:", record.time);
-//         return record.time > fiveSecondsAgo;
-//     });
-
-//     console.log("Recent Records:", recentRecords);
-
-//     if (recentRecords.length === 0) return 0;
-//     const totalDuration = recentRecords.reduce((acc, record) => acc + record.duration, 0);
-//     console.log("Total Duration:", totalDuration);
-//     return totalDuration / recentRecords.length;
-// }
 
 
 
