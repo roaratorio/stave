@@ -17,6 +17,7 @@ let peakSlider;
 let forceSlider;
 let stabilitySlider;
 let customSlider;
+let canvasEl; // the canvas DOM element — scaled to fill the screen in fullscreen
 
 let particles = [];
 let boundaries = [];
@@ -144,6 +145,10 @@ const OUTRO_DURATION = 30000;
 let outroStartTime = 0;
 let outroFactor = 0; // 0 = normal, 1 = fully at rest
 
+// Scene fade-in: the canvas emerges from the parchment over SCENE_FADE_IN ms on Start Audio
+let audioStartTime = 0;
+const SCENE_FADE_IN = 1500;
+
 //Create the lines for the stave.................
 
 let line1;
@@ -172,6 +177,10 @@ function preload(){
 function setup() {
     let canvas = createCanvas(1150, 500);
     canvas.parent('canvasContainer');
+    canvasEl = canvas.elt;
+    // Scale the canvas to fill the screen (letterboxed) whenever fullscreen toggles
+    document.addEventListener('fullscreenchange', updateFullscreenScale);
+    document.addEventListener('webkitfullscreenchange', updateFullscreenScale);
     //song = loadSound("judith.mp3", loaded);
   
     // Initialize the moving vector further along the x-axis
@@ -382,6 +391,7 @@ function startAudio() {
   if (!isAudioStarted) {
     getAudioInputSources();
     isAudioStarted = true;
+    audioStartTime = millis();
     let overlay = document.getElementById('onboarding-overlay');
     if (overlay) overlay.style.display = 'none';
     let calBtn = document.getElementById('calibrateButton');
@@ -861,6 +871,12 @@ function draw() {
         }
         endShape();
 
+        // Tension line — connects the performer's dot to the target; thickens and
+        // darkens as the two converge on the sweet spot (tension is 1 frame stale here)
+        stroke(0, map(tension, 0, 1, 20, 200));
+        strokeWeight(map(tension, 0, 1, 0.75, 3));
+        line(movingVector.x, movingVector.y, staticVector.x, staticVector.y);
+
         // Draw moving vector (sweet-spot target)
         stroke(0);
         strokeWeight(1.5);
@@ -1169,8 +1185,19 @@ updateWindMultiplierBasedOnStability(stabilityAssessment);
   fill(100);
   //rect(50, 20, smoothedFlatness*1.5, 20);
   //text('spectrum flatness - lower value, purer tone', 50, 55);
-  
-  
+
+  // Ambient sweet-spot glow — a warm radial vignette that gathers at the canvas
+  // edges as tension rises above 0.5. Transparent center keeps note heads readable.
+  // Visible in performance mode too, where the HUD and vectors are hidden.
+  if (tension > 0.5) {
+    let glow = map(tension, 0.5, 1, 0, 1, true);
+    let g = drawingContext.createRadialGradient(width/2, height/2, height*0.3, width/2, height/2, height*0.78);
+    g.addColorStop(0, 'rgba(255,238,190,0)');
+    g.addColorStop(1, `rgba(255,236,185,${0.28 * glow})`);
+    drawingContext.fillStyle = g;
+    drawingContext.fillRect(0, 0, width, height);
+  }
+
   // Practice HUD — hidden in performance mode
   if (!isPerformanceMode) {
     if (isAudioStarted) {
@@ -1188,19 +1215,39 @@ updateWindMultiplierBasedOnStability(stabilityAssessment);
       strokeWeight(1);
       let markerY = meterY + meterH - constrain(map(0.01, 0, 0.15, 0, meterH), 0, meterH);
       line(meterX - 2, markerY, meterX + 10, markerY);
+      // Label groups the meter and stability dot as one unit
+      noStroke();
+      fill(150);
+      textSize(8);
+      textAlign(CENTER, TOP);
+      text('MIC', meterX + 4, meterY + meterH + 3);
+      textAlign(LEFT, BASELINE);
     }
+    // Stability dot, centered directly above the meter top
     noStroke();
     if (isStable) { fill(50); } else { fill(210, 200, 185); }
-    ellipse(width - 10, height - 90, 8);
+    ellipse(width - 10, height - 88, 8);
   }
   
-  fill(100);
-  strokeWeight(1);
-  textSize(16);
-  //text(stabilityThreshold, width-65, height-70);
-  
-  rectWidth = map(constrain(millis() - transitionStartTime, 0, transitionDuration), 0, transitionDuration, 0, width);
-  rect(0, height-15, rectWidth, 10);
+  // Progress bar — the 8-minute arc's only persistent indicator (visible in
+  // performance mode). A thin ink line that deepens to a warm tone over the
+  // final ~10% to telegraph the approaching ending.
+  let arcProgress = constrain((millis() - transitionStartTime) / transitionDuration, 0, 1);
+  rectWidth = arcProgress * width;
+  let endApproach = constrain(map(arcProgress, 0.9, 1.0, 0, 1), 0, 1);
+  noStroke();
+  fill(lerp(120, 150, endApproach), lerp(120, 70, endApproach), lerp(120, 60, endApproach), 200);
+  rect(0, height - 5, rectWidth, 5);
+
+  // Scene fade-in: emerge from the parchment over the first SCENE_FADE_IN ms
+  if (isAudioStarted) {
+    let fadeAge = millis() - audioStartTime;
+    if (fadeAge < SCENE_FADE_IN) {
+      noStroke();
+      fill(234, 225, 207, map(fadeAge, 0, SCENE_FADE_IN, 255, 0));
+      rect(0, 0, width, height);
+    }
+  }
 }
 
 // Function to draw axes
@@ -1337,9 +1384,35 @@ function clef(){
   
 
 function windowResized() {
-  // Intentionally empty — the browser scales the canvas element to fill the
-  // screen when fullscreen is active. Calling resizeCanvas() here would move
-  // all physics objects out of position.
+  // Keep the fullscreen scale correct if the screen/window dimensions change.
+  // We deliberately do NOT resizeCanvas() — that would move all physics objects.
+  updateFullscreenScale();
+}
+
+// Scale the fixed 1150×500 canvas up to fill the screen in fullscreen, preserving
+// aspect ratio (letterboxed). The drawing buffer is untouched, so physics bodies
+// stay put; only the CSS presentation size changes. p5 maps mouse coords through
+// the element's bounding rect, so input stays accurate under the transform.
+function updateFullscreenScale() {
+  if (!canvasEl) return;
+  let fsActive = document.fullscreenElement || document.webkitFullscreenElement;
+  // Warm dark mat behind the score in fullscreen (see .fs-active in style.css).
+  // p5 fullscreens <html>, so it must be coloured too — <body> alone leaves the
+  // letterbox bands showing the white <html> background behind it.
+  document.body.classList.toggle('fs-active', !!fsActive);
+  document.documentElement.classList.toggle('fs-active', !!fsActive);
+  // Inline fallback in case CSS specificity/UA rules win over the class
+  let matColor = fsActive ? '#2a2520' : '';
+  document.documentElement.style.backgroundColor = matColor;
+  document.body.style.backgroundColor = matColor;
+  if (canvasEl.parentElement) canvasEl.parentElement.style.backgroundColor = matColor;
+  if (fsActive) {
+    let s = Math.min(window.innerWidth / width, window.innerHeight / height);
+    canvasEl.style.transformOrigin = 'center center';
+    canvasEl.style.transform = `scale(${s})`;
+  } else {
+    canvasEl.style.transform = '';
+  }
 }
 
 function mousePressed() {

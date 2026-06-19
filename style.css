@@ -13,6 +13,27 @@ canvas {
   display: block;
 }
 
+/* In fullscreen, replace the stark white surround with a warm dark mat so the
+   letterbox bands above/below the score recede instead of distracting. Applied
+   only in fullscreen (toggled by updateFullscreenScale) so the windowed view
+   keeps its white background and readable control labels. */
+/* Warm dark mat behind the score in fullscreen. Target the fullscreen element by
+   STATE (:fullscreen / :-webkit-full-screen) so it works no matter which element
+   the browser made fullscreen, colour its ::backdrop, and keep the JS-toggled
+   class as a fallback. !important overrides the UA fullscreen background. */
+:fullscreen,
+:-webkit-full-screen,
+html.fs-active,
+body.fs-active {
+  background-color: #2a2520 !important;
+}
+
+::backdrop,
+:fullscreen::backdrop,
+:-webkit-full-screen::backdrop {
+  background-color: #2a2520;
+}
+
 /* Style the slider's thumb (draggable part) */
 .custom-slider {
   -webkit-appearance: none;

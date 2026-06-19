@@ -150,8 +150,16 @@ Five stave lines, each a chain of `Particle` bodies connected by Matter.js `Cons
 ### Vector display (V key)
 
 When `showVectors` is true, the exponential decay curve path is drawn, plus:
+- **Tension line** — connects the two dots; alpha (20→200) and stroke weight (0.75→3) scale with `tension`, so it thickens and darkens as the vectors converge. Drawn before the dots so they sit on top. Uses the previous frame's `tension` (computed later in `draw()`) — imperceptible lag.
 - **Red dot** (10px, black outline) — `movingVector`, the 8-minute sweet-spot target
 - **Green dot** (16px, black outline) — `staticVector`, the performer's current state
+
+### Ambient UI cues
+
+- **Sweet-spot glow** — when `tension > 0.5`, a warm radial vignette (drawn via `drawingContext.createRadialGradient`) gathers at the canvas edges, fading in with tension. Transparent center keeps note heads readable. Drawn in `draw()` regardless of mode, so it rewards the performer in performance mode where the HUD and vectors are hidden.
+- **Progress bar** — a thin 5px bar at the bottom; `rectWidth` tracks the 8-minute arc. Over the final ~10% (`arcProgress` 0.9→1.0) it deepens from neutral grey toward a warm tone to telegraph the approaching ending.
+- **Scene fade-in** — on Start Audio, `audioStartTime` is set; the scene emerges from the parchment as a fading overlay rect over `SCENE_FADE_IN` (1500ms), drawn last in `draw()`.
+- **Practice HUD** — the mic meter and stability dot are grouped: the stability dot sits centered just above the meter top, with a small "MIC" label below.
 
 ### Key globals and ownership rules
 
