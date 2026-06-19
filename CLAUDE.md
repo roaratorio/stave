@@ -161,6 +161,13 @@ When `showVectors` is true, the exponential decay curve path is drawn, plus:
 - **Scene fade-in** — on Start Audio, `audioStartTime` is set; the scene emerges from the parchment as a fading overlay rect over `SCENE_FADE_IN` (1500ms), drawn last in `draw()`.
 - **Practice HUD** — the mic meter and stability dot are grouped: the stability dot sits centered just above the meter top, with a small "MIC" label below.
 
+### Fullscreen
+
+The canvas is a fixed `1150×500` buffer. `updateFullscreenScale()` (bound to `fullscreenchange` / `webkitfullscreenchange`, and called from `windowResized()`) handles fullscreen presentation:
+
+- **Scale to fill** — applies a CSS `transform: scale(min(screenW/1150, screenH/500))` to the canvas element (`canvasEl`), so it fills the screen letterboxed while preserving aspect ratio. The drawing buffer is untouched, so **physics bodies don't move** and p5 maps mouse input correctly through the scaled bounding rect. The transform is cleared on exit. Never call `resizeCanvas()` — it would reposition all physics bodies.
+- **Warm dark mat** — the stark white surround (the `<html>`/viewport default) is replaced with a warm dark mat (`#2a2520`) only in fullscreen, so the letterbox bands recede. Applied three ways for robustness: a `.fs-active` class toggled on `<html>`/`<body>`, the `:fullscreen` / `:-webkit-full-screen` + `::backdrop` rules in `style.css` (with `!important` to beat the UA background), and inline `backgroundColor` set from JS on `<html>`/`<body>`/canvas container. The windowed view keeps its white background so the dark control labels stay readable.
+
 ### Key globals and ownership rules
 
 - `windMulti` — owned exclusively by `updateWindMultiplierBasedOnStability()`; never assign elsewhere
